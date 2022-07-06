@@ -764,7 +764,7 @@ def test_channel_state_changed_bilateral(node_factory, bitcoind):
     event1 = wait_for_event(l1)
     event2 = wait_for_event(l2)
     if l1.config('experimental-dual-fund'):
-        # Dual funded channels have an extra state change
+        # Dual funded channels
         assert(event1['peer_id'] == l2_id)  # we only test these IDs the first time
         assert(event1['channel_id'] == cid)
         assert(event1['short_channel_id'] is None)
@@ -781,9 +781,25 @@ def test_channel_state_changed_bilateral(node_factory, bitcoind):
         assert(event2['cause'] == "remote")
         assert(event2['message'] == "Sigs exchanged, waiting for lock-in")
         event2 = wait_for_event(l2)
+    else:
+        assert(event1['peer_id'] == l2_id)  # we only test these IDs the first time
+        assert(event1['channel_id'] == cid)
+        assert(event1['short_channel_id'] is None)  # None until locked in
+        assert(event1['old_state'] == "unknown")
+        assert(event1['new_state'] == "CHANNELD_AWAITING_LOCKIN")
+        assert(event1['cause'] == "user")
+        assert(event1['message'] == "new channel opened")
+        event1 = wait_for_event(l1)
 
-    assert(event1['peer_id'] == l2_id)  # we only test these IDs the first time
-    assert(event1['channel_id'] == cid)
+        assert(event2['peer_id'] == l1_id)  # we only test these IDs the first time
+        assert(event2['channel_id'] == cid)
+        assert(event2['short_channel_id'] is None)  # None until locked in
+        assert(event2['old_state'] == "unknown")
+        assert(event2['new_state'] == "CHANNELD_AWAITING_LOCKIN")
+        assert(event2['cause'] == "remote")
+        assert(event2['message'] == "new channel opened")
+        event2 = wait_for_event(l2)
+
     assert(event1['short_channel_id'] == scid)
     if l1.config('experimental-dual-fund'):
         assert(event1['old_state'] == "DUALOPEND_AWAITING_LOCKIN")
@@ -793,8 +809,6 @@ def test_channel_state_changed_bilateral(node_factory, bitcoind):
     assert(event1['cause'] == "user")
     assert(event1['message'] == "Lockin complete")
 
-    assert(event2['peer_id'] == l1_id)
-    assert(event2['channel_id'] == cid)
     assert(event2['short_channel_id'] == scid)
     if l1.config('experimental-dual-fund'):
         assert(event2['old_state'] == "DUALOPEND_AWAITING_LOCKIN")
