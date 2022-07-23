@@ -25,9 +25,22 @@ struct bitcoin_block_hdr {
 	le32 nonce;
 };
 
+struct elements_dynafed_params {
+	u64 dynafed_type;
+	u8 *signblockscript; // compact or full
+	u32 signblock_witness_limit; // compact or full
+	u8 *elided_root; // compact
+	u8 *fedpeg_program; // full
+	u8 *fedpegscript; // full
+	u8 **extension_space; // full
+};
+
 struct elements_block_proof {
 	u8 *challenge;
 	u8 *solution;
+	struct elements_dynafed_params *current;
+	struct elements_dynafed_params *proposed;
+	u8 **witness;
 };
 
 struct elements_block_hdr {

@@ -4,6 +4,89 @@
 #include <ccan/str/hex/hex.h>
 #include <common/type_to_string.h>
 
+static bool is_dynafed(le32 version){
+	return (version>>31) == 1;
+}
+
+static struct elements_dynafed_params *
+pull_elements_dynafed_params(const tal_t *ctx, const u8 **cursor, size_t *max){
+	struct elements_dynafed_params *params = tal(ctx, struct elements_dynafed_params);
+	size_t dynafed_type = pull_varint(cursor, max);
+	params->dynafed_type = dynafed_type;
+	size_t blob_len;
+	if(dynafed_type > 0)
+	{
+		blob_len = pull_varint(cursor, max);
+		params->signblockscript = tal_arr(params, u8, blob_len);
+		pull(cursor, max, params->signblockscript, blob_len);
+		params->signblock_witness_limit = pull_le32(cursor, max);
+	}
+
+	if(dynafed_type == 1){
+		params->elided_root = tal_arr(params, u8, 32);
+		pull(cursor, max, params->elided_root, 32);
+	}else if(dynafed_type == 2){
+		blob_len = pull_varint(cursor, max);
+		params->fedpeg_program = tal_arr(params, u8, blob_len);
+		pull(cursor, max, params->fedpeg_program, blob_len);
+
+		blob_len = pull_varint(cursor, max);
+		params->fedpegscript = tal_arr(params, u8, blob_len);
+		pull(cursor, max, params->fedpegscript, blob_len);
+
+		size_t ext_space_len = pull_varint(cursor, max);
+		params->extension_space = tal_arr(params, u8*, ext_space_len);
+		for (size_t i = 0; i < ext_space_len; i++)
+		{
+			blob_len = pull_varint(cursor, max);
+			params->extension_space[i] = tal_arr(params->extension_space, u8, blob_len);
+			pull(cursor, max, params->extension_space[i], blob_len);
+		}
+	}
+	return params;
+}
+
+static void sha256_dynafed_params(struct sha256_ctx *shactx, struct elements_dynafed_params *params){
+	u8 vt[VARINT_MAX_LEN];
+	size_t vtlen;
+	vtlen = varint_put(vt, params->dynafed_type);
+	sha256_update(shactx, vt, vtlen);
+	size_t len;
+	if(params->dynafed_type > 0)
+	{
+		len = tal_bytelen(params->signblockscript);
+		vtlen = varint_put(vt, len);
+		sha256_update(shactx, vt, vtlen);
+		sha256_update(shactx, params->signblockscript, len);
+		sha256_le32(shactx, params->signblock_witness_limit);
+	}
+
+	if(params->dynafed_type == 1){
+		sha256_update(shactx, params->elided_root, 32);
+	}else if(params->dynafed_type == 2){
+		len = tal_bytelen(params->fedpeg_program);
+		vtlen = varint_put(vt, len);
+		sha256_update(shactx, vt, vtlen);
+		sha256_update(shactx, params->fedpeg_program, len);
+
+		len = tal_bytelen(params->fedpegscript);
+		vtlen = varint_put(vt, len);
+		sha256_update(shactx, vt, vtlen);
+		sha256_update(shactx, params->fedpegscript, len);
+
+		size_t ext_space_len = tal_count(params->extension_space);
+		vtlen = varint_put(vt, ext_space_len);
+		sha256_update(shactx, vt, vtlen);
+		for (size_t i = 0; i < ext_space_len; i++)
+		{
+			len = tal_bytelen(params->extension_space[i]);
+			vtlen = varint_put(vt, len);
+			sha256_update(shactx, vt, vtlen);
+			sha256_update(shactx, params->extension_space[i], len);
+		}
+	}
+}
+
 /* Encoding is <blockhdr> <varint-num-txs> <tx>... */
 struct bitcoin_block *
 bitcoin_block_from_hex(const tal_t *ctx, const struct chainparams *chainparams,
@@ -35,13 +118,27 @@ bitcoin_block_from_hex(const tal_t *ctx, const struct chainparams *chainparams,
 		b->elements_hdr = tal(b, struct elements_block_hdr);
 		b->elements_hdr->block_height = pull_le32(&p, &len);
 
-		size_t challenge_len = pull_varint(&p, &len);
-		b->elements_hdr->proof.challenge = tal_arr(b->elements_hdr, u8, challenge_len);
-		pull(&p, &len, b->elements_hdr->proof.challenge, challenge_len);
+		if(is_dynafed(b->hdr.version)){
+			b->elements_hdr->proof.current = pull_elements_dynafed_params(b->elements_hdr, &p, &len);
+			b->elements_hdr->proof.proposed = pull_elements_dynafed_params(b->elements_hdr, &p, &len);
+			size_t witness_len = pull_varint(&p, &len);
+			size_t blob_len;
+			b->elements_hdr->proof.witness = tal_arr(b->elements_hdr, u8*, witness_len);
+			for (size_t i = 0; i < witness_len; i++)
+			{
+				blob_len = pull_varint(&p, &len);
+				b->elements_hdr->proof.witness[i] = tal_arr(b->elements_hdr->proof.witness, u8, blob_len);
+				pull(&p, &len, b->elements_hdr->proof.witness[i], blob_len);
+			}
+		}else{
+			size_t challenge_len = pull_varint(&p, &len);
+			b->elements_hdr->proof.challenge = tal_arr(b->elements_hdr, u8, challenge_len);
+			pull(&p, &len, b->elements_hdr->proof.challenge, challenge_len);
 
-		size_t solution_len = pull_varint(&p, &len);
-		b->elements_hdr->proof.solution = tal_arr(b->elements_hdr, u8, solution_len);
-		pull(&p, &len, b->elements_hdr->proof.solution, solution_len);
+			size_t solution_len = pull_varint(&p, &len);
+			b->elements_hdr->proof.solution = tal_arr(b->elements_hdr, u8, solution_len);
+			pull(&p, &len, b->elements_hdr->proof.solution, solution_len);
+		}
 
 	} else {
 		b->hdr.target = pull_le32(&p, &len);
@@ -76,15 +173,19 @@ void bitcoin_block_blkid(const struct bitcoin_block *b,
 	sha256_update(&shactx, &b->hdr.merkle_hash, sizeof(b->hdr.merkle_hash));
 	sha256_le32(&shactx, b->hdr.timestamp);
 
-        if (is_elements(chainparams)) {
-		size_t clen = tal_bytelen(b->elements_hdr->proof.challenge);
+	if (is_elements(chainparams)) {
 		sha256_le32(&shactx, b->elements_hdr->block_height);
-
-		vtlen = varint_put(vt, clen);
-		sha256_update(&shactx, vt, vtlen);
-		sha256_update(&shactx, b->elements_hdr->proof.challenge, clen);
-		/* The solution is skipped, since that'd create a circular
-		 * dependency apparently */
+		if (is_dynafed(b->hdr.version)){
+			sha256_dynafed_params(&shactx, b->elements_hdr->proof.current);
+			sha256_dynafed_params(&shactx, b->elements_hdr->proof.proposed);
+		}else{
+			size_t clen = tal_bytelen(b->elements_hdr->proof.challenge);
+			vtlen = varint_put(vt, clen);
+			sha256_update(&shactx, vt, vtlen);
+			sha256_update(&shactx, b->elements_hdr->proof.challenge, clen);
+			/* The solution is skipped, since that'd create a circular
+			* dependency apparently */
+		}
 	} else {
 		sha256_le32(&shactx, b->hdr.target);
 		sha256_le32(&shactx, b->hdr.nonce);
