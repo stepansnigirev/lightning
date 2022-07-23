@@ -25,6 +25,7 @@ struct amount_msat {
 struct amount_asset {
 	u64 value;
 	u8 asset[33]; /* 1 version byte + 32 byte asset_tag */
+	bool is_confidential;
 };
 
 /* For constants only: others must be built from primitives! */

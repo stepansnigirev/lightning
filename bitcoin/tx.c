@@ -208,6 +208,7 @@ struct amount_asset bitcoin_tx_output_get_amount(const struct bitcoin_tx *tx,
 						 int outnum)
 {
 	struct amount_asset amount;
+	amount.is_confidential = false;
 	struct wally_tx_output *output;
 	be64 raw;
 
@@ -217,11 +218,16 @@ struct amount_asset bitcoin_tx_output_get_amount(const struct bitcoin_tx *tx,
 
 	if (chainparams->is_elements) {
 		/* We currently only support v1 asset tags */
-		assert(output->asset_len == sizeof(amount.asset) &&
-		       output->asset[0] == 0x01);
-		memcpy(&amount.asset, output->asset, sizeof(amount.asset));
-		memcpy(&raw, output->value + 1, sizeof(raw));
-		amount.value = be64_to_cpu(raw);
+		assert(output->asset_len == sizeof(amount.asset));
+		/* We only support unconfidential outputs */
+		if(output->asset[0] == 0x01){
+			memcpy(&amount.asset, output->asset, sizeof(amount.asset));
+			memcpy(&raw, output->value + 1, sizeof(raw));
+			amount.value = be64_to_cpu(raw);
+		}else{
+			amount.is_confidential = true;
+			amount.value = 0;
+		}
 
 	} else {
 		/* Do not assign amount.asset, we should never touch it in

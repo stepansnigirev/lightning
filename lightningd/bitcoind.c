@@ -850,7 +850,7 @@ static void process_getfilteredblock_step2(struct bitcoind *bitcoind,
 		for (size_t j = 0; j < tx->wtx->num_outputs; j++) {
 			const u8 *script = bitcoin_tx_output_get_script(NULL, tx, j);
 			struct amount_asset amount = bitcoin_tx_output_get_amount(tx, j);
-			if (amount_asset_is_main(&amount) && is_p2wsh(script, NULL)) {
+			if ((!amount.is_confidential) && amount_asset_is_main(&amount) && is_p2wsh(script, NULL)) {
 				/* This is an interesting output, remember it. */
 				o = tal(call->outpoints, struct filteredblock_outpoint);
 				bitcoin_txid(tx, &o->txid);
