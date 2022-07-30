@@ -37,10 +37,14 @@ struct chainparams {
 
 	/* Version codes for BIP32 extended keys in libwally-core*/
 	const struct bip32_key_version bip32_key_version;
+
+	/* Elements-related stuff */
 	const bool is_elements;
 	const u8 *fee_asset_tag;
-	// const u32 confidential_prefix;
-	// const 
+	/* p2pkh or p2sh confidential byte */
+	const u32 confidential_prefix;
+	/* confidential segwit prefix */
+	const char *bip173_confidential_name;
 };
 
 /**
