@@ -14,6 +14,7 @@
 #include <common/json_command.h>
 #include <common/json_param.h>
 #include <common/route.h>
+#include <wally_address.h>
 
 struct param {
 	const char *name;
@@ -738,9 +739,37 @@ json_to_address_scriptpubkey(const tal_t *ctx,
 	bool right_network;
 	u8 addr_version;
 
+	// TODO: ugly... but works
+	// Currently accepts confidential address and converts it to unconfidential.
+	char addrzz[70]; // should be enough for unconfidential address
+	char *unconfidential_addr;
+	addrz = tal_dup_arr(ctx, char, buffer + tok->start, tok->end - tok->start, 1);
+	addrz[tok->end - tok->start] = '\0';
+	// TODO: dirty hack, can be improved
+	// confidential addresses are longer than normal addresses - ~80 for p2sh, 101+ for segwit
+	// normal addresses are ~64 for segwit multisig or less for others, so 70 is a good threshold
+	int res = WALLY_OK;
+	if(is_elements(chainparams) && strlen(addrz) > 70){
+		res = wally_confidential_addr_to_addr(addrz, chainparams->confidential_prefix, &unconfidential_addr);
+		if(res!=WALLY_OK){
+			wally_free_string(unconfidential_addr);
+			res = wally_confidential_addr_to_addr_segwit(addrz, chainparams->bip173_confidential_name, chainparams->bip173_name, &unconfidential_addr);
+		}
+		if(res!=WALLY_OK){
+			wally_free_string(unconfidential_addr);
+			tal_free(addrz);
+			return ADDRESS_PARSE_UNRECOGNIZED;
+		}
+		strcpy(addrzz, unconfidential_addr);
+		wally_free_string(unconfidential_addr);
+	}else{
+		strcpy(addrzz, addrz);
+	}
+	tal_free(addrz);
+
 	parsed =
 	    ripemd160_from_base58(&addr_version, &destination.addr,
-				  buffer + tok->start, tok->end - tok->start);
+				  addrzz, strlen(addrzz));
 
 	if (parsed) {
 		if (addr_version == chainparams->p2pkh_version) {
@@ -756,12 +785,8 @@ json_to_address_scriptpubkey(const tal_t *ctx,
 		/* Insert other parsers that accept pointer+len here. */
 	}
 
-	/* Generate null-terminated address. */
-	addrz = tal_dup_arr(ctx, char, buffer + tok->start, tok->end - tok->start, 1);
-	addrz[tok->end - tok->start] = '\0';
-
 	bip173 = segwit_addr_net_decode(&witness_version, witness_program,
-					&witness_program_len, addrz, chainparams);
+					&witness_program_len, addrzz, chainparams);
 	if (bip173) {
 		bool witness_ok;
 
