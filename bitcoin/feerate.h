@@ -3,6 +3,7 @@
 #include "config.h"
 #include <ccan/build_assert/build_assert.h>
 #include <ccan/short_types/short_types.h>
+#include <bitcoin/chainparams.h>
 
 /* bitcoind considers 250 satoshi per kw to be the minimum acceptable fee:
  * less than this won't even relay.
@@ -33,7 +34,7 @@
  */
 #define FEERATE_FLOOR 253
 
-static inline u32 feerate_floor(void)
+static inline u32 feerate_floor(const struct chainparams *chainparams)
 {
 	/* Assert that bitcoind will see this as above minRelayTxFee */
 	BUILD_ASSERT(FEERATE_BITCOIND_SEES(FEERATE_FLOOR, MINIMUM_TX_WEIGHT)
@@ -44,7 +45,10 @@ static inline u32 feerate_floor(void)
 	/* And I'm right about it being OK for larger txs, too */
 	BUILD_ASSERT(FEERATE_BITCOIND_SEES(FEERATE_FLOOR, (MINIMUM_TX_WEIGHT*2))
 		     >= BITCOIND_MINRELAYTXFEE_PER_KW);
-
-	return FEERATE_FLOOR;
+    /* elements have 10x lower fees */
+    if(chainparams->is_elements){
+        return FEERATE_FLOOR/10;
+    }
+    return FEERATE_FLOOR;
 }
 #endif /* LIGHTNING_BITCOIN_FEERATE_H */

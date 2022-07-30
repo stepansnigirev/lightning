@@ -352,6 +352,8 @@ static void update_feerates(struct bitcoind *bitcoind,
 	 * independent manner. */
 	double alpha = 1 - pow(0.1,(double)topo->poll_seconds / 120);
 
+	const struct chainparams *chainparams = get_chainparams(topo->ld);
+
 	for (size_t i = 0; i < NUM_FEERATES; i++) {
 		u32 feerate = satoshi_per_kw[i];
 
@@ -385,8 +387,8 @@ static void update_feerates(struct bitcoind *bitcoind,
 					  feerate, alpha);
 		}
 
-		if (feerate < feerate_floor()) {
-			feerate = feerate_floor();
+		if (feerate < feerate_floor(chainparams)) {
+			feerate = feerate_floor(chainparams);
 			log_debug(topo->log,
 					  "... feerate estimate for %s hit floor %u",
 					  feerate_name(i), feerate);
@@ -880,8 +882,10 @@ u32 feerate_min(struct lightningd *ld, bool *unknown)
 		}
 	}
 
-	if (min < feerate_floor())
-		return feerate_floor();
+	const struct chainparams *chainparams = get_chainparams(ld);
+
+	if (min < feerate_floor(chainparams))
+		return feerate_floor(chainparams);
 	return min;
 }
 

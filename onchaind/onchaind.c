@@ -353,7 +353,7 @@ static struct bitcoin_tx *tx_to_us(const tal_t *ctx,
 
 	if (amount_sat_less(out->sat, min_out)) {
 		/* FIXME: We should use SIGHASH_NONE so others can take it */
-		fee = amount_tx_fee(feerate_floor(), weight);
+		fee = amount_tx_fee(feerate_floor(out->chainparams), weight);
 		status_unusual("TX %s amount %s too small to"
 			       " pay reasonable fee, using minimal fee"
 			       " and ignoring",

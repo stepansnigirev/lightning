@@ -226,12 +226,14 @@ void peer_start_closingd(struct channel *channel,
 	/* Pick some value above slow feerate (or min possible if unknown) */
 	minfee = commit_tx_base_fee(feerate_min(ld, NULL), 0);
 
+	const struct chainparams *chainparams = get_chainparams(ld);
+
 	/* If we can't determine feerate, start at half unilateral feerate. */
 	feerate = mutual_close_feerate(ld->topology);
 	if (!feerate) {
 		feerate = channel->channel_info.feerate_per_kw[LOCAL] / 2;
-		if (feerate < feerate_floor())
-			feerate = feerate_floor();
+		if (feerate < feerate_floor(chainparams))
+			feerate = feerate_floor(chainparams);
 	}
 	startfee = commit_tx_base_fee(feerate, 0);
 

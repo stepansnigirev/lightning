@@ -484,6 +484,8 @@ enum watch_result onchaind_funding_spent(struct channel *channel,
 	bitcoin_txid(tx, &txid);
 	bitcoin_txid(channel->last_tx, &our_last_txid);
 
+	chainparams = get_chainparams(channel->peer->ld);
+
 	/* We try to use normal feerate for onchaind spends. */
 	feerate = try_get_feerate(ld->topology, FEERATE_NORMAL);
 	if (!feerate) {
@@ -509,11 +511,9 @@ enum watch_result onchaind_funding_spent(struct channel *channel,
 		}
 
 		feerate = fee.satoshis / bitcoin_tx_weight(tx); /* Raw: reverse feerate extraction */
-		if (feerate < feerate_floor())
-			feerate = feerate_floor();
+		if (feerate < feerate_floor(chainparams))
+			feerate = feerate_floor(chainparams);
 	}
-
-	chainparams = get_chainparams(channel->peer->ld);
 
 	msg = towire_onchain_init(channel,
 				  &channel->their_shachain.chain,

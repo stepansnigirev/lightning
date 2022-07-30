@@ -1064,7 +1064,9 @@ static struct command_result *json_fund_channel_start(struct command *cmd,
 	u8 *msg = NULL;
 	struct amount_sat max_funding_satoshi, *amount;
 
-	max_funding_satoshi = get_chainparams(cmd->ld)->max_funding;
+	const struct chainparams *chainparams = get_chainparams(cmd->ld);
+
+	max_funding_satoshi = chainparams->max_funding;
 	fc->cmd = cmd;
 	fc->cancels = tal_arr(fc, struct command *, 0);
 	fc->uc = NULL;
@@ -1093,7 +1095,7 @@ static struct command_result *json_fund_channel_start(struct command *cmd,
 		}
 	}
 
-	if (*feerate_per_kw < feerate_floor()) {
+	if (*feerate_per_kw < feerate_floor(chainparams)) {
 		return command_fail(cmd, LIGHTNINGD,
 				    "Feerate below feerate floor");
 	}
