@@ -1019,6 +1019,10 @@ json_tok_address_scriptpubkey(const tal_t *ctx,
 	bool right_network;
 	u8 addr_version;
 
+	if(is_elements(chainparams)){
+		// TODO: fix to accept confidential addresses
+	}
+
 	parsed =
 	    ripemd160_from_base58(&addr_version, &destination.addr,
 				  buffer + tok->start, tok->end - tok->start);

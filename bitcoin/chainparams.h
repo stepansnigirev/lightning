@@ -39,6 +39,8 @@ struct chainparams {
 	const struct bip32_key_version bip32_key_version;
 	const bool is_elements;
 	const u8 *fee_asset_tag;
+	// const u32 confidential_prefix;
+	// const 
 };
 
 /**
